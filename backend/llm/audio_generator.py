@@ -8,7 +8,7 @@ load_dotenv(".env")
 
 # Initialize client using environment variable or fallback
 api_key = os.getenv("SARVAM_TOKEN")
-client = SarvamAI(api_subscription_key=api_key)
+client = SarvamAI(api_subscription_key="sk_il8nd0wq_mL7zek1E5cRXwtDNgD3dbWU9")
 
 def generate_audio(transcript_text, lang = "hi-IN", output_file="output1.wav"):
     """
