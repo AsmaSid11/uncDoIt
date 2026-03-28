@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Site Guide</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="header">
+      <img class="logo" src="logo.png" width="32" height="32" alt="" />
+      <div class="header-text">
+        <h1>Site Guide</h1>
+        <p class="tagline">Visual tour for this page</p>
+      </div>
+    </header>
+    <p class="hint">
+      Open the site you want to explain, then start the overlay on the active tab.
+    </p>
+    <button type="button" id="start" class="btn primary">Start tour</button>
+    <button type="button" id="stop" class="btn secondary">Stop tour</button>
+    <p id="status" class="status" role="status"></p>
+    <script src="popup.js"></script>
+  </body>
+</html>

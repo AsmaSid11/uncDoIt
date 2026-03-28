@@ -1,0 +1,17 @@
+[
+  {
+    "title": "Welcome",
+    "body": "This short tour walks you through the main parts of the site. Use Next and Back below, or keyboard arrows.",
+    "selector": null
+  },
+  {
+    "title": "Try highlighting",
+    "body": "Steps can highlight a specific element when you set a CSS selector in tour.json. This demo targets the page’s main heading if it exists.",
+    "selector": "h1"
+  },
+  {
+    "title": "Finish",
+    "body": "Edit extension/tour.json to match your real layout and copy. You can add steps, change text, and set selectors (or null for a centered tip only).",
+    "selector": null
+  }
+]

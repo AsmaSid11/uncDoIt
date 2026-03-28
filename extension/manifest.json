@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "UncDoIt Site Guide",
+  "version": "0.1.0",
+  "description": "Visual step-by-step guide for using the website.",
+  "icons": {
+    "16": "logo.png",
+    "48": "logo.png",
+    "128": "logo.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Site Guide",
+    "default_icon": {
+      "16": "logo.png",
+      "48": "logo.png",
+      "128": "logo.png"
+    }
+  },
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "web_accessible_resources": [
+    {
+      "resources": ["tour.json", "content.css"],
+      "matches": ["http://*/*", "https://*/*"]
+    }
+  ]
+}
