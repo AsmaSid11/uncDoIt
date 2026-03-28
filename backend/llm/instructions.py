@@ -2,12 +2,26 @@ import os
 import json
 from google import genai
 from google.genai import types
-from audio_generator import generate_audio
+try:
+    from .audio_generator import generate_audio
+except ImportError:
+    from audio_generator import generate_audio  # type: ignore
 from dotenv import load_dotenv
 
 load_dotenv()
 
-client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+_client: genai.Client | None = None
+
+
+def _get_client() -> genai.Client:
+    """Lazy-initialise the Gemini client."""
+    global _client
+    if _client is None:
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise RuntimeError("GOOGLE_API_KEY is not configured.")
+        _client = genai.Client(api_key=api_key)
+    return _client
 
 
 def get_next_action(
@@ -37,7 +51,7 @@ Current page parsed HTML (every interactive element has a data-navi-id) details:
 
 Infer the task from the query and page, then return the single next action the user should take."""
 
-    response = client.models.generate_content(
+    response = _get_client().models.generate_content(
         model="gemini-3-flash-preview",
         contents=prompt,
         config=types.GenerateContentConfig(
