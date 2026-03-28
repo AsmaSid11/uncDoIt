@@ -2,8 +2,8 @@ import os
 import json
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
 from audio_generator import generate_audio
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -23,16 +23,16 @@ Rules:
 - Infer the current_task from the user query and the HTML on the page. Do not expect it to be told to you.
 - One step at a time. Never give two actions at once.
 - voice_text must be extremely simple. Imagine speaking to someone who has never used a smartphone before.
-- selector must be the most specific CSS selector you can find from the HTML provided.
+- Every interactive element in the HTML has a data-navi-id attribute stamped on it. Return the navi_id of the element the user should interact with next.
 - If the task is already complete based on steps_completed, set is_done to true and explain in voice_text.
-- If you cannot find the right element, set selector to empty string and explain in voice_text.
+- If you cannot find the right element, set navi_id to -1 and explain in voice_text.
 - Detect the language from the user query and set lang to the correct language code.
 - transcription is the voice_text written in the native script of that language."""
 
     prompt = f"""User query: {query}
 Steps already completed: {json.dumps(steps_completed)}
 
-Current page HTML:
+Current page HTML (every interactive element has a data-navi-id):
 {html}
 
 Infer the task from the query and page, then return the single next action the user should take."""
@@ -47,7 +47,7 @@ Infer the task from the query and page, then return the single next action the u
                 "type": "OBJECT",
                 "properties": {
                     "current_task":  {"type": "STRING"},
-                    "selector":      {"type": "STRING"},
+                    "navi_id":       {"type": "INTEGER"},
                     "voice_text":    {"type": "STRING"},
                     "action":        {"type": "STRING", "enum": ["click", "type", "scroll", "wait"]},
                     "value":         {"type": "STRING"},
@@ -55,7 +55,7 @@ Infer the task from the query and page, then return the single next action the u
                     "lang":          {"type": "STRING", "enum": ["hi-IN", "bn-IN", "ta-IN", "te-IN", "gu-IN", "kn-IN", "ml-IN", "mr-IN", "pa-IN", "od-IN", "en-IN"]},
                     "transcription": {"type": "STRING"}
                 },
-                "required": ["current_task", "selector", "voice_text", "action", "value", "is_done", "lang", "transcription"]
+                "required": ["current_task", "navi_id", "voice_text", "action", "value", "is_done", "lang", "transcription"]
             },
             temperature=0.1,
             max_output_tokens=8096,
@@ -68,39 +68,53 @@ Infer the task from the query and page, then return the single next action the u
 if __name__ == "__main__":
     test_html = """
     <html>
-<body>
-    <nav>
-        <div class="logo">Swiggy - Checkout</div>
-        <button class="back-btn">Go Back</button>
-    </nav>
+    <body>
+        <nav>
+            <div class="logo">Swiggy</div>
+            <input data-navi-id="0" id="search-bar" class="search-input" type="text" placeholder="Search for restaurants and food"/>
+            <button data-navi-id="1" class="search-btn">Search</button>
+        </nav>
 
-    <div class="checkout-container">
-        <h2>Delivery Address</h2>
-        <div class="address-section" id="address-selection">
-            <p>You haven't added an address yet.</p>
-            <button id="add-new-address" class="add-address-btn">Add New Address</button>
-        </div>
-
-        <div class="order-summary" id="summary">
-            <h3>Order Summary</h3>
-            <div class="summary-item">
-                <span>Chicken Biryani (x1)</span>
-                <span>₹220</span>
+        <div class="menu-section" id="menu">
+            <h2>Biryani Place — Menu</h2>
+            <div class="menu-item" id="item-1">
+                <span class="item-name">Chicken Biryani</span>
+                <span class="item-price">₹220</span>
+                <p class="item-desc">Aromatic basmati rice with tender chicken pieces</p>
+                <div class="item-counter">
+                    <button data-navi-id="2" class="decrease-btn" data-item="chicken-biryani">-</button>
+                    <span class="item-count">1</span>
+                    <button data-navi-id="3" class="increase-btn" data-item="chicken-biryani">+</button>
+                </div>
             </div>
-            <div class="bill-details">
-                <div>Item Total: ₹220</div>
-                <div>Delivery Fee: ₹30</div>
-                <div style="font-weight: bold;">Grand Total: ₹250</div>
+            <div class="menu-item" id="item-2">
+                <span class="item-name">Mutton Biryani</span>
+                <span class="item-price">₹320</span>
+                <p class="item-desc">Slow cooked mutton with fragrant spices</p>
+                <button data-navi-id="4" class="add-to-cart-btn" data-item="mutton-biryani">ADD</button>
+            </div>
+            <div class="menu-item" id="item-3">
+                <span class="item-name">Veg Biryani</span>
+                <span class="item-price">₹160</span>
+                <p class="item-desc">Fresh vegetables with saffron rice</p>
+                <button data-navi-id="5" class="add-to-cart-btn" data-item="veg-biryani">ADD</button>
             </div>
         </div>
 
-        <div class="payment-section">
-            <button id="make-payment" class="pay-btn" disabled>Proceed to Pay</button>
-            <p class="error-msg" id="address-warning">Please add an address to continue</p>
+        <div class="cart-section" id="cart">
+            <h3>Your Cart</h3>
+            <div class="cart-items" id="cart-items">
+                <div class="cart-item">
+                    <span class="cart-item-name">Chicken Biryani</span>
+                    <span class="cart-item-qty">x1</span>
+                    <span class="cart-item-price">₹220</span>
+                </div>
+            </div>
+            <div class="cart-total" id="cart-total">Total: ₹220</div>
+            <button data-navi-id="6" class="proceed-btn" id="proceed-to-checkout">Proceed to Checkout</button>
         </div>
-    </div>
-</body>
-</html>
+    </body>
+    </html>
     """
 
     action = get_next_action(
@@ -110,11 +124,11 @@ if __name__ == "__main__":
             "opened swiggy homepage",
             "clicked on Biryani Place restaurant",
             "saw the menu with biryani options",
-            "clicked ADD on Chicken Biryani",
-            "Clicked on proceed to checkout"
+            "clicked ADD on Chicken Biryani"
         ]
     )
 
+    print(json.dumps(action, ensure_ascii=False, indent=2))
     generate_audio(
     transcript_text=action['transcription'],
     lang=action['lang']
