@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "UncDoIt Site Guide",
-  "version": "0.1.0",
-  "description": "Visual step-by-step guide for using the website.",
+  "version": "0.3.0",
+  "description": "Visual guide using UncDoIt POST /api/guide (LLM + optional voice).",
   "icons": {
     "16": "logo.png",
     "48": "logo.png",
@@ -17,11 +17,21 @@
       "128": "logo.png"
     }
   },
-  "permissions": ["activeTab", "scripting"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": ["http://*/*", "https://*/*"],
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "web_accessible_resources": [
     {
-      "resources": ["tour.json", "content.css"],
+      "resources": ["content.css"],
       "matches": ["http://*/*", "https://*/*"]
     }
   ]

@@ -11,14 +11,31 @@
       <img class="logo" src="logo.png" width="32" height="32" alt="" />
       <div class="header-text">
         <h1>Site Guide</h1>
-        <p class="tagline">Visual tour for this page</p>
+        <p class="tagline">POST /api/guide</p>
       </div>
     </header>
     <p class="hint">
-      Open the site you want to explain, then start the overlay on the active tab.
+      Describe your goal. The page is scanned for controls and sent to your
+      UncDoIt backend for the next step (and optional voice).
     </p>
-    <button type="button" id="start" class="btn primary">Start tour</button>
-    <button type="button" id="stop" class="btn secondary">Stop tour</button>
+    <label class="field-label" for="intent">Goal</label>
+    <textarea
+      id="intent"
+      class="input intent"
+      rows="3"
+      placeholder="e.g. I want to apply for a new PAN"
+      maxlength="2000"
+    ></textarea>
+    <label class="field-label" for="apiBase">API base URL</label>
+    <input
+      id="apiBase"
+      class="input"
+      type="url"
+      spellcheck="false"
+      placeholder="http://127.0.0.1:8000"
+    />
+    <button type="button" id="start" class="btn primary">Start guide</button>
+    <button type="button" id="stop" class="btn secondary">Stop guide</button>
     <p id="status" class="status" role="status"></p>
     <script src="popup.js"></script>
   </body>
