@@ -2,12 +2,23 @@ import os
 import json
 from google import genai
 from google.genai import types
+
 from dotenv import load_dotenv
 from audio_generator import generate_audio
 
 load_dotenv()
 
-client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+_client: genai.Client | None = None
+
+def _get_client() -> genai.Client:
+    """Lazy-initialise the Gemini client."""
+    global _client
+    if _client is None:
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise RuntimeError("GOOGLE_API_KEY is not configured.")
+        _client = genai.Client(api_key=api_key)
+    return _client
 
 
 def get_next_action(
@@ -49,7 +60,7 @@ Interactive elements on the current page:
 
 Infer the task from the query, page context, and elements, then return the single next action the user should take."""
 
-    response = client.models.generate_content(
+    response = _get_client().models.generate_content(
         model="gemini-3.1-flash-lite-preview",
         contents=prompt,
         config=types.GenerateContentConfig(

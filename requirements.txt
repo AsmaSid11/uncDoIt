@@ -1,3 +1,5 @@
 google-genai
 sarvamai
 python-dotenv
+fastapi
+uvicorn[standard]

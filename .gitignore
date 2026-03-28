@@ -1,5 +1,6 @@
+__pycache__/
+*.pyc
 backend/llm/.env
 backend/llm/output1.wav
-backend/llm/__pycache__/*
 venv
 .env
