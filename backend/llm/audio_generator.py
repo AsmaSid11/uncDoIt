@@ -45,6 +45,33 @@ def generate_audio_base64(transcript_text: str, lang: str = "hi-IN") -> str:
             pass
 
 
+def _decode_base64_audio(s: str) -> bytes:
+    raw = s.strip()
+    pad = (-len(raw)) % 4
+    return base64.b64decode(raw + "=" * pad, validate=False)
+
+
+def transcribe_audio_base64(
+    audio_b64: str,
+    *,
+    language_code: str = "unknown",
+    input_audio_codec: str = "webm",
+) -> str:
+    """Transcribe recorded speech to text (same Sarvam key as TTS)."""
+    data = _decode_base64_audio(audio_b64)
+    if len(data) > 25 * 1024 * 1024:
+        raise ValueError("Audio payload too large (max 25 MB).")
+    client = _get_client()
+    resp = client.speech_to_text.transcribe(
+        file=data,
+        model="saaras:v3",
+        mode="transcribe",
+        language_code=language_code,
+        input_audio_codec=input_audio_codec,
+    )
+    return (resp.transcript or "").strip()
+
+
 if __name__ == "__main__":
     from dotenv import load_dotenv
     load_dotenv()

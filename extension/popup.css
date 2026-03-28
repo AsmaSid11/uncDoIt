@@ -70,10 +70,62 @@ body {
   box-shadow: 0 0 0 2px rgb(123 92 240 / 0.2);
 }
 
+.intent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.intent-row .input.intent {
+  flex: 1;
+  margin-bottom: 0;
+  min-width: 0;
+}
+
 .input.intent {
   resize: vertical;
   min-height: 64px;
   line-height: 1.4;
+}
+
+.btn.voice {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  margin: 0;
+  border-radius: 10px;
+  font-size: 20px;
+  line-height: 1;
+  background: #fff;
+  border: 1px solid #d8dee8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn.voice:hover {
+  background: #f0f3f8;
+}
+
+.btn.voice.recording {
+  background: #fde8e8;
+  border-color: #e57373;
+  animation: pulse-mic 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-mic {
+  50% {
+    box-shadow: 0 0 0 3px rgb(229 115 115 / 0.35);
+  }
+}
+
+.voice-hint {
+  margin: -4px 0 10px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #6b7285;
 }
 
 .btn {

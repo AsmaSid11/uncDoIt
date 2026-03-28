@@ -19,13 +19,21 @@
       UncDoIt backend for the next step (and optional voice).
     </p>
     <label class="field-label" for="intent">Goal</label>
-    <textarea
-      id="intent"
-      class="input intent"
-      rows="3"
-      placeholder="e.g. I want to apply for a new PAN"
-      maxlength="2000"
-    ></textarea>
+    <div class="intent-row">
+      <textarea
+        id="intent"
+        class="input intent"
+        rows="3"
+        placeholder="e.g. I want to apply for a new PAN"
+        maxlength="2000"
+      ></textarea>
+      <button type="button" id="voice" class="btn voice" title="Speak your goal">
+        🎤
+      </button>
+    </div>
+    <p class="voice-hint" id="voiceHint">
+      Tap the mic to dictate your goal (uses your UncDoIt server for speech-to-text).
+    </p>
     <label class="field-label" for="apiBase">API base URL</label>
     <input
       id="apiBase"

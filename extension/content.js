@@ -16,7 +16,7 @@
   let onKey;
   let onResize;
 
-  /** @type {{ title: string, body: string, selector: string | null, isDone: boolean, completedLine: string, action: string, expectedValue: string }[]} */
+  /** @type {{ title: string, body: string, selector: string | null, isDone: boolean, completedLine: string, action: string, expectedValue: string, lang: string, ttsText: string, audioBase64: string | null }[]} */
   let history = [];
   let index = 0;
   /** @type {string[]} */
@@ -29,6 +29,10 @@
   let stepWatchAbort = null;
   let guideAdvancing = false;
   let resumeAttempted = false;
+
+  let guideAudioEl = null;
+  let guideAudioObjectUrl = null;
+  let audioSyncGen = 0;
 
   function writeCheckpoint() {
     try {
@@ -138,23 +142,165 @@
     });
   }
 
-  function playAudioBase64(b64) {
-    if (!b64 || typeof b64 !== "string") return;
-    try {
-      const binary = atob(b64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-      const blob = new Blob([bytes], { type: "audio/wav" });
-      const u = URL.createObjectURL(blob);
-      const a = new Audio(u);
-      a.addEventListener("ended", () => URL.revokeObjectURL(u));
-      a.addEventListener("error", () => URL.revokeObjectURL(u));
-      a.play().catch(() => URL.revokeObjectURL(u));
-    } catch {
-      /* ignore */
+  function stopAudioPlayback() {
+    if (guideAudioEl) {
+      guideAudioEl.pause();
+      guideAudioEl.removeAttribute("src");
+      guideAudioEl.load();
+      guideAudioEl = null;
     }
+    if (guideAudioObjectUrl) {
+      URL.revokeObjectURL(guideAudioObjectUrl);
+      guideAudioObjectUrl = null;
+    }
+  }
+
+  function hideAudioRow() {
+    const row = shadow?.getElementById("site-guide-audio-row");
+    if (row) row.style.display = "none";
+  }
+
+  function ensureAudioRow() {
+    if (!cardEl || !shadow) return;
+    if (shadow.getElementById("site-guide-audio-row")) return;
+    const row = document.createElement("div");
+    row.id = "site-guide-audio-row";
+    const btn = document.createElement("button");
+    btn.id = "site-guide-audio-btn";
+    btn.type = "button";
+    btn.textContent = "Play";
+    const status = document.createElement("span");
+    status.id = "site-guide-audio-status";
+    status.setAttribute("aria-live", "polite");
+    row.appendChild(btn);
+    row.appendChild(status);
+    const actions = shadow.getElementById("site-guide-actions");
+    if (actions && actions.parentNode === cardEl) {
+      cardEl.insertBefore(row, actions);
+    } else {
+      cardEl.appendChild(row);
+    }
+  }
+
+  /**
+   * Uses WAV from /api/guide when present; otherwise POST /api/audio (Sarvam TTS).
+   * Play/Pause respects browser autoplay rules (tap Play if blocked).
+   */
+  async function setupStepAudio(step) {
+    ensureAudioRow();
+    const row = shadow.getElementById("site-guide-audio-row");
+    const btn = shadow.getElementById("site-guide-audio-btn");
+    const status = shadow.getElementById("site-guide-audio-status");
+    if (!row || !btn || !status) return;
+
+    stopAudioPlayback();
+
+    const hasInline = step.audioBase64 && String(step.audioBase64).length > 0;
+    const tts = (step.ttsText || "").trim();
+    if (!hasInline && !tts) {
+      row.style.display = "none";
+      return;
+    }
+
+    row.style.display = "flex";
+    btn.style.display = "inline-flex";
+    btn.textContent = "Play";
+    status.textContent = "";
+
+    const playFromBase64 = (b64) => {
+      try {
+        const binary = atob(b64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: "audio/wav" });
+        guideAudioObjectUrl = URL.createObjectURL(blob);
+        guideAudioEl = new Audio(guideAudioObjectUrl);
+        guideAudioEl.addEventListener("play", () => {
+          btn.textContent = "Pause";
+        });
+        guideAudioEl.addEventListener("pause", () => {
+          btn.textContent = "Play";
+        });
+        guideAudioEl.addEventListener("ended", () => {
+          btn.textContent = "Play";
+        });
+        btn.onclick = () => {
+          if (!guideAudioEl) return;
+          if (guideAudioEl.paused) {
+            guideAudioEl.play().catch(() => {
+              status.textContent = "Tap Play for sound";
+            });
+          } else {
+            guideAudioEl.pause();
+          }
+        };
+        guideAudioEl
+          .play()
+          .then(() => {
+            status.textContent = "";
+          })
+          .catch(() => {
+            status.textContent = "Tap Play for sound";
+          });
+      } catch {
+        status.textContent = "Could not play audio";
+      }
+    };
+
+    if (hasInline) {
+      playFromBase64(step.audioBase64);
+      return;
+    }
+
+    status.textContent = "Loading voice…";
+    try {
+      const res = await chrome.runtime.sendMessage({
+        type: "FETCH_AUDIO",
+        text: tts,
+        lang: step.lang || "hi-IN",
+        apiBaseUrl,
+      });
+      if (res?.ok && res.audio_base64) {
+        step.audioBase64 = res.audio_base64;
+        status.textContent = "";
+        playFromBase64(res.audio_base64);
+      } else {
+        status.textContent =
+          res?.error || "Voice unavailable (set SARVAM_TOKEN on server)";
+        btn.textContent = "Retry";
+        btn.onclick = () => {
+          void setupStepAudio(step);
+        };
+      }
+    } catch (e) {
+      status.textContent = String(e?.message || e);
+      btn.textContent = "Retry";
+      btn.onclick = () => {
+        void setupStepAudio(step);
+      };
+    }
+  }
+
+  async function syncAudioForCurrentStep() {
+    const my = ++audioSyncGen;
+    const st = history[index];
+    if (!shadow) return;
+    ensureAudioRow();
+    if (overlayMode === "error" || !st) {
+      stopAudioPlayback();
+      hideAudioRow();
+      return;
+    }
+    const hasAudio = (st.audioBase64 && st.audioBase64.length) || (st.ttsText || "").trim();
+    if (!hasAudio) {
+      stopAudioPlayback();
+      hideAudioRow();
+      return;
+    }
+    await setupStepAudio(st);
+    if (my !== audioSyncGen) return;
   }
 
   /** Normalize LLM JSON whether API returns snake_case or camelCase. */
@@ -171,6 +317,7 @@
       value: String(raw.value ?? ""),
       is_done: Boolean(raw.is_done ?? raw.isDone),
       transcription: String(raw.transcription ?? "").trim(),
+      lang: String(raw.lang ?? "hi-IN"),
     };
   }
 
@@ -187,6 +334,9 @@
     const nid = Number.isFinite(inst.navi_id) ? inst.navi_id : -1;
     const selector = nid >= 0 ? `[${NAVI}="${nid}"]` : null;
     const completedLine = (inst.voice_text || inst.current_task || "").trim();
+    const ttsText = (inst.transcription || inst.voice_text || "")
+      .trim()
+      .slice(0, 2500);
     return {
       title,
       body,
@@ -195,6 +345,9 @@
       completedLine,
       action: inst.action || "wait",
       expectedValue: (inst.value || "").trim(),
+      lang: inst.lang || "hi-IN",
+      ttsText,
+      audioBase64: null,
     };
   }
 
@@ -288,11 +441,11 @@
       if (!inst) throw new Error("Invalid guide response (no instruction).");
 
       const view = instructionToView(inst);
+      view.audioBase64 = data.audio_base64 ?? data.audioBase64 ?? null;
       history.push(view);
       index = history.length - 1;
       ensureRoot();
       layoutStep();
-      playAudioBase64(data.audio_base64 ?? data.audioBase64);
       clearCheckpoint();
     } catch (e) {
       clearCheckpoint();
@@ -376,6 +529,9 @@
     if (!host) {
       host = document.createElement("div");
       host.id = "site-guide-root";
+      /* Inline so stacking works even before content.css finishes loading in shadow. */
+      host.style.cssText =
+        "position:fixed;inset:0;z-index:2147483647;width:100vw;height:100vh;pointer-events:none;margin:0;padding:0;border:0;";
       document.documentElement.appendChild(host);
       shadow = host.attachShadow({ mode: "open" });
       const link = document.createElement("link");
@@ -439,6 +595,7 @@
       spotlightEl = shadow.getElementById("site-guide-spotlight");
       cardEl = shadow.getElementById("site-guide-card");
     }
+    ensureAudioRow();
   }
 
   function resolveTarget(selector) {
@@ -511,6 +668,8 @@
 
     if (el) {
       el.scrollIntoView({ block: "center", behavior: "smooth" });
+      /* Show the card immediately; rAF refines position next to the highlight. */
+      centerCard();
       requestAnimationFrame(() => {
         const { top, left, width, height } = rectWithPadding(el);
         spotlightEl.style.opacity = width && height ? "1" : "0";
@@ -533,11 +692,13 @@
         cardEl.style.left = `${l}px`;
         cardEl.style.transform = "none";
         attachStepWatchers();
+        void syncAudioForCurrentStep();
       });
     } else {
       spotlightEl.style.opacity = "0";
       centerCard();
       attachStepWatchers();
+      void syncAudioForCurrentStep();
     }
   }
 
@@ -589,6 +750,9 @@
         completedLine: "",
         action: "wait",
         expectedValue: "",
+        lang: "en-IN",
+        ttsText: "",
+        audioBase64: null,
       },
     ];
     index = 0;
@@ -596,6 +760,7 @@
   }
 
   function teardown() {
+    stopAudioPlayback();
     clearCheckpoint();
     clearStepWatchers();
     if (onKey) {
@@ -639,6 +804,9 @@
           completedLine: "",
           action: "wait",
           expectedValue: "",
+          lang: "en-IN",
+          ttsText: "",
+          audioBase64: null,
         },
       ];
       index = 0;
@@ -659,19 +827,8 @@
     overlayMode = "tour";
 
     try {
-      const data = await callGuide();
-      const inst = normInstruction(data.instruction);
-      if (!inst) throw new Error("Invalid guide response (no instruction).");
-
-      const view = instructionToView(inst);
-      history.push(view);
-      index = 0;
-
-      ensureRoot();
+      await fetchAndShowNextStep();
       wireKeyboardResize();
-      layoutStep();
-      playAudioBase64(data.audio_base64 ?? data.audioBase64);
-      clearCheckpoint();
     } catch (e) {
       ensureRoot();
       overlayMode = "error";
@@ -684,6 +841,9 @@
           completedLine: "",
           action: "wait",
           expectedValue: "",
+          lang: "en-IN",
+          ttsText: "",
+          audioBase64: null,
         },
       ];
       index = 0;
@@ -698,9 +858,17 @@
     }
   }
 
-  chrome.runtime.onMessage.addListener((msg) => {
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg?.type === "SITE_GUIDE_START") {
-      start(msg).catch(() => teardown());
+      start(msg)
+        .then(() => {
+          sendResponse({ ok: true });
+        })
+        .catch(() => {
+          teardown();
+          sendResponse({ ok: false });
+        });
+      return true;
     }
     if (msg?.type === "SITE_GUIDE_STOP") {
       teardown();

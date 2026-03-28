@@ -1,6 +1,19 @@
+/**
+ * Do not use `all: initial` on :host — it resets z-index to auto so the whole
+ * overlay can stack UNDER page layers (you still hear TTS because Audio is separate).
+ */
 :host {
-  all: initial;
   display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  border: none;
+  pointer-events: none;
+  isolation: isolate;
   font-family: "Segoe UI Variable", system-ui, sans-serif;
 }
 
@@ -40,6 +53,7 @@
   color: #1a1a20;
   border-radius: 14px;
   box-shadow: 0 16px 50px rgb(0 0 0 / 0.22);
+  pointer-events: auto;
 }
 
 #site-guide-card h2 {
@@ -61,6 +75,37 @@
   font-weight: 600;
   color: #6b7285;
   margin-bottom: 12px;
+}
+
+#site-guide-audio-row {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+}
+
+#site-guide-audio-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5e0;
+  background: #f8f9fc;
+  color: #2a2f3a;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#site-guide-audio-btn:hover {
+  background: #eef0f5;
+}
+
+#site-guide-audio-status {
+  font-size: 12px;
+  color: #6b7285;
+  line-height: 1.35;
+  flex: 1 1 140px;
+  min-width: 0;
 }
 
 #site-guide-actions {

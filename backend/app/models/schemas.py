@@ -81,3 +81,23 @@ class AudioRequest(BaseModel):
 
 class AudioResponse(BaseModel):
     audio_base64: str
+
+
+# ── /api/transcribe (speech-to-text) ────────────────────────────────
+
+class TranscribeRequest(BaseModel):
+    """Recorded audio from the extension (e.g. MediaRecorder WebM/Opus)."""
+
+    audio_base64: str = Field(..., min_length=1, max_length=12_000_000)
+    language_code: str = Field(
+        default="unknown",
+        description="Sarvam language code or 'unknown' for auto-detect.",
+    )
+    input_audio_codec: str = Field(
+        default="webm",
+        description="Codec hint matching the recording (e.g. webm, wav, mp3).",
+    )
+
+
+class TranscribeResponse(BaseModel):
+    text: str = Field(..., description="Transcribed user speech.")

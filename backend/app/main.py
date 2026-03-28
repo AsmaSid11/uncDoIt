@@ -12,8 +12,10 @@ from backend.app.models.schemas import (
     GuideRequest,
     GuideResponse,
     ActionInstruction,
+    TranscribeRequest,
+    TranscribeResponse,
 )
-from backend.llm.audio_generator import generate_audio_base64
+from backend.llm.audio_generator import generate_audio_base64, transcribe_audio_base64
 from backend.llm.instructions import get_next_action
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -106,3 +108,23 @@ def audio(body: AudioRequest):
         raise HTTPException(502, f"Audio error: {e}") from e
 
     return AudioResponse(audio_base64=b64)
+
+
+@app.post("/api/transcribe", response_model=TranscribeResponse)
+def transcribe(body: TranscribeRequest):
+    """Speech-to-text for the extension popup — requires Sarvam (same key as TTS)."""
+    _require_env("SARVAM_TOKEN")
+
+    try:
+        text = transcribe_audio_base64(
+            body.audio_base64,
+            language_code=body.language_code or "unknown",
+            input_audio_codec=body.input_audio_codec or "webm",
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except Exception as e:
+        logger.exception("Transcription failed")
+        raise HTTPException(502, f"Transcription error: {e}") from e
+
+    return TranscribeResponse(text=text)

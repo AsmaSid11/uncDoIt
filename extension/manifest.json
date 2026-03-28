@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "UncDoIt Site Guide",
-  "version": "0.3.0",
-  "description": "Visual guide using UncDoIt POST /api/guide (LLM + optional voice).",
+  "version": "0.4.2",
+  "description": "Visual guide via POST /api/guide; optional TTS and voice goal input (POST /api/transcribe).",
   "icons": {
     "16": "logo.png",
     "48": "logo.png",
@@ -21,6 +21,7 @@
     "service_worker": "background.js"
   },
   "permissions": ["activeTab", "scripting", "storage"],
+  "optional_permissions": ["audioCapture"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "content_scripts": [
     {
