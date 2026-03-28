@@ -3,6 +3,7 @@ import json
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
+from audio_generator import generate_audio
 
 load_dotenv()
 
@@ -67,53 +68,39 @@ Infer the task from the query and page, then return the single next action the u
 if __name__ == "__main__":
     test_html = """
     <html>
-    <body>
-        <nav>
-            <div class="logo">Swiggy</div>
-            <input id="search-bar" class="search-input" type="text" placeholder="Search for restaurants and food"/>
-            <button class="search-btn">Search</button>
-        </nav>
+<body>
+    <nav>
+        <div class="logo">Swiggy - Checkout</div>
+        <button class="back-btn">Go Back</button>
+    </nav>
 
-        <div class="menu-section" id="menu">
-            <h2>Biryani Place — Menu</h2>
-            <div class="menu-item" id="item-1">
-                <span class="item-name">Chicken Biryani</span>
-                <span class="item-price">₹220</span>
-                <p class="item-desc">Aromatic basmati rice with tender chicken pieces</p>
-                <div class="item-counter">
-                    <button class="decrease-btn" data-item="chicken-biryani">-</button>
-                    <span class="item-count">1</span>
-                    <button class="increase-btn" data-item="chicken-biryani">+</button>
-                </div>
+    <div class="checkout-container">
+        <h2>Delivery Address</h2>
+        <div class="address-section" id="address-selection">
+            <p>You haven't added an address yet.</p>
+            <button id="add-new-address" class="add-address-btn">Add New Address</button>
+        </div>
+
+        <div class="order-summary" id="summary">
+            <h3>Order Summary</h3>
+            <div class="summary-item">
+                <span>Chicken Biryani (x1)</span>
+                <span>₹220</span>
             </div>
-            <div class="menu-item" id="item-2">
-                <span class="item-name">Mutton Biryani</span>
-                <span class="item-price">₹320</span>
-                <p class="item-desc">Slow cooked mutton with fragrant spices</p>
-                <button class="add-to-cart-btn" data-item="mutton-biryani">ADD</button>
-            </div>
-            <div class="menu-item" id="item-3">
-                <span class="item-name">Veg Biryani</span>
-                <span class="item-price">₹160</span>
-                <p class="item-desc">Fresh vegetables with saffron rice</p>
-                <button class="add-to-cart-btn" data-item="veg-biryani">ADD</button>
+            <div class="bill-details">
+                <div>Item Total: ₹220</div>
+                <div>Delivery Fee: ₹30</div>
+                <div style="font-weight: bold;">Grand Total: ₹250</div>
             </div>
         </div>
 
-        <div class="cart-section" id="cart">
-            <h3>Your Cart</h3>
-            <div class="cart-items" id="cart-items">
-                <div class="cart-item">
-                    <span class="cart-item-name">Chicken Biryani</span>
-                    <span class="cart-item-qty">x1</span>
-                    <span class="cart-item-price">₹220</span>
-                </div>
-            </div>
-            <div class="cart-total" id="cart-total">Total: ₹220</div>
-            <button class="proceed-btn" id="proceed-to-checkout">Proceed to Checkout</button>
+        <div class="payment-section">
+            <button id="make-payment" class="pay-btn" disabled>Proceed to Pay</button>
+            <p class="error-msg" id="address-warning">Please add an address to continue</p>
         </div>
-    </body>
-    </html>
+    </div>
+</body>
+</html>
     """
 
     action = get_next_action(
@@ -123,8 +110,13 @@ if __name__ == "__main__":
             "opened swiggy homepage",
             "clicked on Biryani Place restaurant",
             "saw the menu with biryani options",
-            "clicked ADD on Chicken Biryani"
+            "clicked ADD on Chicken Biryani",
+            "Clicked on proceed to checkout"
         ]
     )
 
-    print(json.dumps(action, ensure_ascii=False, indent=2))
+    generate_audio(
+    transcript_text=action['transcription'],
+    lang=action['lang']
+    )
+    
