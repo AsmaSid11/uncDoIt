@@ -1,12 +1,9 @@
 (function () {
   const FLAG = "__uncdoitSiteGuide";
-  if (window[FLAG]) {
-    return;
-  }
+  if (window[FLAG]) return;
   window[FLAG] = true;
 
   const NAVI = "data-navi-id";
-  /** Survives same-tab navigation (same origin) so step 2 loads after clicking a real link */
   const CHECKPOINT_KEY = "uncdoit_guide_ck_v1";
 
   let shadow;
@@ -16,16 +13,13 @@
   let onKey;
   let onResize;
 
-  /** @type {{ title: string, body: string, selector: string | null, isDone: boolean, completedLine: string, action: string, expectedValue: string, lang: string, ttsText: string, audioBase64: string | null }[]} */
   let history = [];
   let index = 0;
-  /** @type {string[]} */
   let stepsCompleted = [];
   let query = "";
   let apiBaseUrl = "";
   let overlayMode = "tour";
 
-  /** AbortController for “do the action on the page” listeners */
   let stepWatchAbort = null;
   let guideAdvancing = false;
   let resumeAttempted = false;
@@ -45,17 +39,11 @@
           exp: Date.now() + 5 * 60 * 1000,
         }),
       );
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
   }
 
   function clearCheckpoint() {
-    try {
-      sessionStorage.removeItem(CHECKPOINT_KEY);
-    } catch {
-      /* ignore */
-    }
+    try { sessionStorage.removeItem(CHECKPOINT_KEY); } catch { /* ignore */ }
   }
 
   function readCheckpoint() {
@@ -69,9 +57,7 @@
         return null;
       }
       return s;
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   }
 
   function wireKeyboardResize() {
@@ -81,9 +67,7 @@
       else if (e.key === "ArrowRight") go(1);
       else if (e.key === "ArrowLeft") go(-1);
     };
-    onResize = () => {
-      if (history.length && shadow) layoutStep();
-    };
+    onResize = () => { if (history.length && shadow) layoutStep(); };
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", onResize);
   }
@@ -100,46 +84,31 @@
     return "";
   }
 
-  /** Same shape as frontend/pagecontext.js — matches backend NaviElement + PageContext. */
   function extractNaviElements() {
-    const interactive = document.querySelectorAll(
-      "button, input, select, textarea, a",
-    );
+    const interactive = document.querySelectorAll("button, input, select, textarea, a");
     const elements = [];
-
     interactive.forEach((el, idx) => {
       el.setAttribute(NAVI, String(idx));
       const entry = {
         navi_id: idx,
         tag: el.tagName,
         id: el.id || "",
-        text:
-          (el.innerText && el.innerText.trim()) ||
-          el.placeholder ||
-          el.value ||
-          "",
+        text: (el.innerText && el.innerText.trim()) || el.placeholder || el.value || "",
         context: getNearestContext(el),
       };
       if (entry.text || entry.id) elements.push(entry);
     });
-
     const pageContext = {
       title: document.title || "",
       url: window.location.href,
       path: window.location.pathname,
-      pageText: (document.body?.innerText || "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 2000),
+      pageText: (document.body?.innerText || "").replace(/\s+/g, " ").trim().slice(0, 2000),
     };
-
     return { elements, pageContext };
   }
 
   function stripNaviAttributes() {
-    document.querySelectorAll(`[${NAVI}]`).forEach((el) => {
-      el.removeAttribute(NAVI);
-    });
+    document.querySelectorAll(`[${NAVI}]`).forEach((el) => el.removeAttribute(NAVI));
   }
 
   function stopAudioPlayback() {
@@ -182,10 +151,6 @@
     }
   }
 
-  /**
-   * Uses WAV from /api/guide when present; otherwise POST /api/audio (Sarvam TTS).
-   * Play/Pause respects browser autoplay rules (tap Play if blocked).
-   */
   async function setupStepAudio(step) {
     ensureAudioRow();
     const row = shadow.getElementById("site-guide-audio-row");
@@ -197,10 +162,7 @@
 
     const hasInline = step.audioBase64 && String(step.audioBase64).length > 0;
     const tts = (step.ttsText || "").trim();
-    if (!hasInline && !tts) {
-      row.style.display = "none";
-      return;
-    }
+    if (!hasInline && !tts) { row.style.display = "none"; return; }
 
     row.style.display = "flex";
     btn.style.display = "inline-flex";
@@ -214,45 +176,30 @@
         for (let i = 0; i < binary.length; i++) {
           bytes[i] = binary.charCodeAt(i);
         }
-        const blob = new Blob([bytes], { type: "audio/wav" });
+        // Sarvam returns MP3 not WAV
+        const blob = new Blob([bytes], { type: "audio/mpeg" });
         guideAudioObjectUrl = URL.createObjectURL(blob);
         guideAudioEl = new Audio(guideAudioObjectUrl);
-        guideAudioEl.addEventListener("play", () => {
-          btn.textContent = "Pause";
-        });
-        guideAudioEl.addEventListener("pause", () => {
-          btn.textContent = "Play";
-        });
-        guideAudioEl.addEventListener("ended", () => {
-          btn.textContent = "Play";
-        });
+        guideAudioEl.addEventListener("play", () => { btn.textContent = "Pause"; });
+        guideAudioEl.addEventListener("pause", () => { btn.textContent = "Play"; });
+        guideAudioEl.addEventListener("ended", () => { btn.textContent = "Play"; });
         btn.onclick = () => {
           if (!guideAudioEl) return;
           if (guideAudioEl.paused) {
-            guideAudioEl.play().catch(() => {
-              status.textContent = "Tap Play for sound";
-            });
+            guideAudioEl.play().catch(() => { status.textContent = "Tap Play for sound"; });
           } else {
             guideAudioEl.pause();
           }
         };
-        guideAudioEl
-          .play()
-          .then(() => {
-            status.textContent = "";
-          })
-          .catch(() => {
-            status.textContent = "Tap Play for sound";
-          });
+        guideAudioEl.play()
+          .then(() => { status.textContent = ""; })
+          .catch(() => { status.textContent = "Tap Play for sound"; });
       } catch {
         status.textContent = "Could not play audio";
       }
     };
 
-    if (hasInline) {
-      playFromBase64(step.audioBase64);
-      return;
-    }
+    if (hasInline) { playFromBase64(step.audioBase64); return; }
 
     status.textContent = "Loading voice…";
     try {
@@ -267,19 +214,14 @@
         status.textContent = "";
         playFromBase64(res.audio_base64);
       } else {
-        status.textContent =
-          res?.error || "Voice unavailable (set SARVAM_TOKEN on server)";
+        status.textContent = res?.error || "Voice unavailable";
         btn.textContent = "Retry";
-        btn.onclick = () => {
-          void setupStepAudio(step);
-        };
+        btn.onclick = () => { void setupStepAudio(step); };
       }
     } catch (e) {
       status.textContent = String(e?.message || e);
       btn.textContent = "Retry";
-      btn.onclick = () => {
-        void setupStepAudio(step);
-      };
+      btn.onclick = () => { void setupStepAudio(step); };
     }
   }
 
@@ -288,27 +230,17 @@
     const st = history[index];
     if (!shadow) return;
     ensureAudioRow();
-    if (overlayMode === "error" || !st) {
-      stopAudioPlayback();
-      hideAudioRow();
-      return;
-    }
+    if (overlayMode === "error" || !st) { stopAudioPlayback(); hideAudioRow(); return; }
     const hasAudio = (st.audioBase64 && st.audioBase64.length) || (st.ttsText || "").trim();
-    if (!hasAudio) {
-      stopAudioPlayback();
-      hideAudioRow();
-      return;
-    }
+    if (!hasAudio) { stopAudioPlayback(); hideAudioRow(); return; }
     await setupStepAudio(st);
     if (my !== audioSyncGen) return;
   }
 
-  /** Normalize LLM JSON whether API returns snake_case or camelCase. */
   function normInstruction(raw) {
     if (!raw || typeof raw !== "object") return null;
     const nid = raw.navi_id ?? raw.naviId;
-    const parsed =
-      typeof nid === "number" ? nid : parseInt(String(nid ?? ""), 10);
+    const parsed = typeof nid === "number" ? nid : parseInt(String(nid ?? ""), 10);
     return {
       current_task: String(raw.current_task ?? raw.currentTask ?? "").trim(),
       navi_id: Number.isFinite(parsed) ? parsed : -1,
@@ -325,18 +257,14 @@
     const title = (inst.current_task || "Next step").trim();
     let body = (inst.voice_text || "").trim();
     const tr = (inst.transcription || "").trim();
-    if (tr && tr !== body) {
-      body = body ? `${body}\n\n${tr}` : tr;
-    }
+    if (tr && tr !== body) { body = body ? `${body}\n\n${tr}` : tr; }
     if (inst.action === "type" && inst.value) {
       body += body ? `\n\nType: ${inst.value}` : `Type: ${inst.value}`;
     }
     const nid = Number.isFinite(inst.navi_id) ? inst.navi_id : -1;
     const selector = nid >= 0 ? `[${NAVI}="${nid}"]` : null;
     const completedLine = (inst.voice_text || inst.current_task || "").trim();
-    const ttsText = (inst.transcription || inst.voice_text || "")
-      .trim()
-      .slice(0, 2500);
+    const ttsText = (inst.transcription || inst.voice_text || "").trim().slice(0, 2500);
     return {
       title,
       body,
@@ -352,29 +280,18 @@
   }
 
   function clearStepWatchers() {
-    if (stepWatchAbort) {
-      stepWatchAbort.abort();
-      stepWatchAbort = null;
-    }
+    if (stepWatchAbort) { stepWatchAbort.abort(); stepWatchAbort = null; }
   }
 
-  /**
-   * When viewing the latest non-terminal step, listen for the real UI action
-   * (click / type / scroll into view) instead of requiring “Next”.
-   */
   function attachStepWatchers() {
     clearStepWatchers();
     if (overlayMode === "error" || !history.length || !shadow) return;
-
     const atLatest = index === history.length - 1;
     if (!atLatest) return;
-
     const step = history[index];
     if (step.isDone) return;
-
     const el = resolveTarget(step.selector);
     const action = (step.action || "wait").toLowerCase();
-
     if (!el || action === "wait") return;
 
     const ac = new AbortController();
@@ -388,15 +305,11 @@
     };
 
     if (action === "click") {
-      const onActivate = (ev) => {
+      document.addEventListener("click", (ev) => {
         const t = ev.target;
         if (!(t instanceof Node) || !el.contains(t)) return;
         finish();
-      };
-      document.addEventListener("click", onActivate, {
-        capture: true,
-        signal: sig,
-      });
+      }, { capture: true, signal: sig });
       return;
     }
 
@@ -404,11 +317,8 @@
       const want = step.expectedValue || "";
       const check = () => {
         const v = (el.value != null ? String(el.value) : "").trim();
-        if (!want) {
-          if (v.length > 0) finish();
-        } else if (v === want || v.includes(want)) {
-          finish();
-        }
+        if (!want) { if (v.length > 0) finish(); }
+        else if (v === want || v.includes(want)) { finish(); }
       };
       el.addEventListener("input", check, { signal: sig });
       el.addEventListener("change", check, { signal: sig });
@@ -417,29 +327,21 @@
     }
 
     if (action === "scroll") {
-      const io = new IntersectionObserver(
-        (entries) => {
-          for (const e of entries) {
-            if (e.isIntersecting && e.intersectionRatio >= 0.2) {
-              io.disconnect();
-              finish();
-            }
-          }
-        },
-        { threshold: [0, 0.2, 0.5] },
-      );
+      const io = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting && e.intersectionRatio >= 0.2) { io.disconnect(); finish(); }
+        }
+      }, { threshold: [0, 0.2, 0.5] });
       sig.addEventListener("abort", () => io.disconnect(), { once: true });
       io.observe(el);
     }
   }
 
-  /** Call /api/guide and append one step; clears checkpoint on success. */
   async function fetchAndShowNextStep() {
     try {
       const data = await callGuide();
       const inst = normInstruction(data.instruction);
       if (!inst) throw new Error("Invalid guide response (no instruction).");
-
       const view = instructionToView(inst);
       view.audioBase64 = data.audio_base64 ?? data.audioBase64 ?? null;
       history.push(view);
@@ -453,40 +355,27 @@
     }
   }
 
-  /** Skip / Next: record completed line, checkpoint, then fetch. */
   async function advanceGuideCore() {
     const cur = history[index];
-    if (cur.isDone) {
-      teardown();
-      return;
-    }
-    if (cur.completedLine) {
-      stepsCompleted.push(cur.completedLine);
-    }
+    if (cur.isDone) { teardown(); return; }
+    if (cur.completedLine) stepsCompleted.push(cur.completedLine);
     writeCheckpoint();
     await fetchAndShowNextStep();
   }
 
-  /** User followed the highlight (click/type/scroll): step already “done”, merge into steps_completed then fetch. */
   async function advanceAfterUserFollows() {
     if (overlayMode === "error") return;
     if (index !== history.length - 1) return;
     const cur = history[index];
     if (cur.isDone) return;
     if (guideAdvancing) return;
-    if (cur.completedLine) {
-      stepsCompleted.push(cur.completedLine);
-    }
+    if (cur.completedLine) stepsCompleted.push(cur.completedLine);
     writeCheckpoint();
     guideAdvancing = true;
-    try {
-      await fetchAndShowNextStep();
-    } finally {
-      guideAdvancing = false;
-    }
+    try { await fetchAndShowNextStep(); }
+    finally { guideAdvancing = false; }
   }
 
-  /** After a full page load, continue guide using saved checkpoint (same tab, same origin). */
   async function resumeFromNavigationState(s) {
     query = s.query;
     apiBaseUrl = s.apiBaseUrl;
@@ -495,21 +384,13 @@
     history = [];
     index = 0;
     guideAdvancing = true;
-    try {
-      await fetchAndShowNextStep();
-      wireKeyboardResize();
-    } finally {
-      guideAdvancing = false;
-    }
+    try { await fetchAndShowNextStep(); wireKeyboardResize(); }
+    finally { guideAdvancing = false; }
   }
 
   async function callGuide() {
     const { elements, pageContext } = extractNaviElements();
-    if (!elements.length) {
-      throw new Error(
-        "No controls found on this page (buttons, links, inputs).",
-      );
-    }
+    if (!elements.length) throw new Error("No controls found on this page.");
     const res = await chrome.runtime.sendMessage({
       type: "FETCH_GUIDE",
       query,
@@ -518,9 +399,7 @@
       steps_completed: stepsCompleted,
       apiBaseUrl,
     });
-    if (!res?.ok) {
-      throw new Error(res?.error || "Guide request failed.");
-    }
+    if (!res?.ok) throw new Error(res?.error || "Guide request failed.");
     return res.data;
   }
 
@@ -529,9 +408,7 @@
     if (!host) {
       host = document.createElement("div");
       host.id = "site-guide-root";
-      /* Inline so stacking works even before content.css finishes loading in shadow. */
-      host.style.cssText =
-        "position:fixed;inset:0;z-index:2147483647;width:100vw;height:100vh;pointer-events:none;margin:0;padding:0;border:0;";
+      host.style.cssText = "position:fixed;inset:0;z-index:2147483647;width:100vw;height:100vh;pointer-events:none;margin:0;padding:0;border:0;";
       document.documentElement.appendChild(host);
       shadow = host.attachShadow({ mode: "open" });
       const link = document.createElement("link");
@@ -584,9 +461,7 @@
       shadow.appendChild(cardEl);
 
       closeBtn.addEventListener("click", teardown);
-      backdropEl.addEventListener("click", (e) => {
-        if (e.target === backdropEl) teardown();
-      });
+      backdropEl.addEventListener("click", (e) => { if (e.target === backdropEl) teardown(); });
       backBtn.addEventListener("click", () => go(-1));
       nextBtn.addEventListener("click", () => go(1));
     } else {
@@ -600,11 +475,7 @@
 
   function resolveTarget(selector) {
     if (!selector || typeof selector !== "string") return null;
-    try {
-      return document.querySelector(selector);
-    } catch {
-      return null;
-    }
+    try { return document.querySelector(selector); } catch { return null; }
   }
 
   function rectWithPadding(el, pad = 8) {
@@ -639,21 +510,16 @@
     const atLatest = index === history.length - 1;
     const el = resolveTarget(step.selector);
     const action = (step.action || "wait").toLowerCase();
-    const canListen =
-      atLatest &&
-      overlayMode === "tour" &&
-      !step.isDone &&
-      el &&
+    const canListen = atLatest && overlayMode === "tour" && !step.isDone && el &&
       (action === "click" || action === "type" || action === "scroll");
 
     progressNode.textContent = canListen
       ? `Step ${index + 1} — follow the highlight on the page`
       : `Step ${index + 1}`;
 
-    backBtn.style.visibility =
-      overlayMode === "error" || index === 0 ? "hidden" : "visible";
-
+    backBtn.style.visibility = overlayMode === "error" || index === 0 ? "hidden" : "visible";
     nextBtn.style.display = "";
+
     if (overlayMode === "error") {
       nextBtn.textContent = "Close";
     } else if (atLatest && step.isDone) {
@@ -668,7 +534,6 @@
 
     if (el) {
       el.scrollIntoView({ block: "center", behavior: "smooth" });
-      /* Show the card immediately; rAF refines position next to the highlight. */
       centerCard();
       requestAnimationFrame(() => {
         const { top, left, width, height } = rectWithPadding(el);
@@ -682,12 +547,8 @@
         const cr = cardEl.getBoundingClientRect();
         let t = top + height + gap;
         let l = left;
-        if (t + cr.height > window.innerHeight - 16) {
-          t = Math.max(16, top - gap - cr.height);
-        }
-        if (l + cr.width > window.innerWidth - 16) {
-          l = Math.max(16, window.innerWidth - 16 - cr.width);
-        }
+        if (t + cr.height > window.innerHeight - 16) t = Math.max(16, top - gap - cr.height);
+        if (l + cr.width > window.innerWidth - 16) l = Math.max(16, window.innerWidth - 16 - cr.width);
         cardEl.style.top = `${t}px`;
         cardEl.style.left = `${l}px`;
         cardEl.style.transform = "none";
@@ -704,57 +565,35 @@
 
   async function go(delta) {
     if (delta < 0) {
-      if (index > 0) {
-        index -= 1;
-        layoutStep();
-      }
+      if (index > 0) { index -= 1; layoutStep(); }
       return;
     }
-
-    if (overlayMode === "error") {
-      teardown();
-      return;
-    }
-
-    if (index < history.length - 1) {
-      index += 1;
-      layoutStep();
-      return;
-    }
-
+    if (overlayMode === "error") { teardown(); return; }
+    if (index < history.length - 1) { index += 1; layoutStep(); return; }
     const cur = history[index];
-    if (cur.isDone) {
-      teardown();
-      return;
-    }
-
+    if (cur.isDone) { teardown(); return; }
     if (guideAdvancing) return;
     guideAdvancing = true;
-    try {
-      await advanceGuideCore();
-    } finally {
-      guideAdvancing = false;
-    }
+    try { await advanceGuideCore(); }
+    finally { guideAdvancing = false; }
   }
 
   function showError(message) {
     clearStepWatchers();
     ensureRoot();
     overlayMode = "error";
-    history = [
-      {
-        title: "Guide could not continue",
-        body: message,
-        selector: null,
-        isDone: true,
-        completedLine: "",
-        action: "wait",
-        expectedValue: "",
-        lang: "en-IN",
-        ttsText: "",
-        audioBase64: null,
-      },
-    ];
+    history = [{
+      title: "Guide could not continue",
+      body: message,
+      selector: null,
+      isDone: true,
+      completedLine: "",
+      action: "wait",
+      expectedValue: "",
+      lang: "en-IN",
+      ttsText: "",
+      audioBase64: null,
+    }];
     index = 0;
     layoutStep();
   }
@@ -763,14 +602,8 @@
     stopAudioPlayback();
     clearCheckpoint();
     clearStepWatchers();
-    if (onKey) {
-      window.removeEventListener("keydown", onKey);
-      onKey = null;
-    }
-    if (onResize) {
-      window.removeEventListener("resize", onResize);
-      onResize = null;
-    }
+    if (onKey) { window.removeEventListener("keydown", onKey); onKey = null; }
+    if (onResize) { window.removeEventListener("resize", onResize); onResize = null; }
     const host = document.getElementById("site-guide-root");
     if (host) host.remove();
     shadow = undefined;
@@ -788,32 +621,25 @@
     teardown();
     resumeAttempted = true;
     query = (payload?.userIntent || "").trim();
-    apiBaseUrl = (payload?.apiBaseUrl || "http://127.0.0.1:8000")
-      .trim()
-      .replace(/\/$/, "");
+    apiBaseUrl = (payload?.apiBaseUrl || "http://127.0.0.1:8000").trim().replace(/\/$/, "");
 
     if (!query) {
       overlayMode = "error";
       ensureRoot();
-      history = [
-        {
-          title: "Guide could not start",
-          body: "Enter your goal in the extension popup.",
-          selector: null,
-          isDone: true,
-          completedLine: "",
-          action: "wait",
-          expectedValue: "",
-          lang: "en-IN",
-          ttsText: "",
-          audioBase64: null,
-        },
-      ];
+      history = [{
+        title: "Guide could not start",
+        body: "Enter your goal in the extension popup.",
+        selector: null,
+        isDone: true,
+        completedLine: "",
+        action: "wait",
+        expectedValue: "",
+        lang: "en-IN",
+        ttsText: "",
+        audioBase64: null,
+      }];
       index = 0;
-      onKey = (e) => {
-        if (e.key === "Escape") teardown();
-        else if (e.key === "ArrowRight") go(1);
-      };
+      onKey = (e) => { if (e.key === "Escape") teardown(); else if (e.key === "ArrowRight") go(1); };
       onResize = () => layoutStep();
       window.addEventListener("keydown", onKey);
       window.addEventListener("resize", onResize);
@@ -832,25 +658,20 @@
     } catch (e) {
       ensureRoot();
       overlayMode = "error";
-      history = [
-        {
-          title: "Guide could not start",
-          body: String(e?.message || e),
-          selector: null,
-          isDone: true,
-          completedLine: "",
-          action: "wait",
-          expectedValue: "",
-          lang: "en-IN",
-          ttsText: "",
-          audioBase64: null,
-        },
-      ];
+      history = [{
+        title: "Guide could not start",
+        body: String(e?.message || e),
+        selector: null,
+        isDone: true,
+        completedLine: "",
+        action: "wait",
+        expectedValue: "",
+        lang: "en-IN",
+        ttsText: "",
+        audioBase64: null,
+      }];
       index = 0;
-      onKey = (e) => {
-        if (e.key === "Escape") teardown();
-        else if (e.key === "ArrowRight") go(1);
-      };
+      onKey = (e) => { if (e.key === "Escape") teardown(); else if (e.key === "ArrowRight") go(1); };
       onResize = () => layoutStep();
       window.addEventListener("keydown", onKey);
       window.addEventListener("resize", onResize);
@@ -860,19 +681,10 @@
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg?.type === "SITE_GUIDE_START") {
-      start(msg)
-        .then(() => {
-          sendResponse({ ok: true });
-        })
-        .catch(() => {
-          teardown();
-          sendResponse({ ok: false });
-        });
+      start(msg).then(() => sendResponse({ ok: true })).catch(() => { teardown(); sendResponse({ ok: false }); });
       return true;
     }
-    if (msg?.type === "SITE_GUIDE_STOP") {
-      teardown();
-    }
+    if (msg?.type === "SITE_GUIDE_STOP") { teardown(); }
   });
 
   function tryResumeAfterNavigation() {
@@ -884,11 +696,8 @@
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", tryResumeAfterNavigation, {
-      once: true,
-    });
+    document.addEventListener("DOMContentLoaded", tryResumeAfterNavigation, { once: true });
   } else {
     tryResumeAfterNavigation();
   }
 })();
-
