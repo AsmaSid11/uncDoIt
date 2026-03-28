@@ -1,4 +1,4 @@
-"""Pydantic models for the /analyze endpoint."""
+"""Pydantic models for the UncDoIt API."""
 
 from __future__ import annotations
 
@@ -7,49 +7,77 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-# ── Request ──────────────────────────────────────────────────────────
+# ── Shared types ─────────────────────────────────────────────────────
 
-class UIContext(BaseModel):
-    """Structured representation of interactive elements on a webpage."""
+SUPPORTED_LANGS = Literal[
+    "hi-IN", "bn-IN", "ta-IN", "te-IN", "gu-IN",
+    "kn-IN", "ml-IN", "mr-IN", "pa-IN", "od-IN", "en-IN",
+]
 
-    buttons: list[str] = Field(default_factory=list, examples=[["Add to Cart", "Buy Now"]])
-    inputs: list[str] = Field(default_factory=list, examples=[["Enter address"]])
-    links: list[str] = Field(default_factory=list, examples=[["Go to Cart"]])
-    text: list[str] = Field(default_factory=list, examples=[["Product details"]])
-
-
-class AnalyzeRequest(BaseModel):
-    """Payload sent by the browser extension to request action planning."""
-
-    user_intent: str = Field(
-        ...,
-        min_length=1,
-        examples=["Buy this product"],
-        description="Natural-language description of what the user wants to do.",
-    )
-    context: UIContext
+ACTION_TYPE = Literal["click", "type", "scroll", "wait"]
 
 
-# ── Response ─────────────────────────────────────────────────────────
+# ── Frontend data shapes (mirrors pagecontext.js output) ────────────
 
-class ActionStep(BaseModel):
-    """A single browser action to be executed."""
+class NaviElement(BaseModel):
+    """A single interactive element on the page, tagged with a navi_id."""
 
-    action: Literal["click", "type", "scroll", "select", "navigate"] = Field(
-        ...,
-        description="Kind of browser action.",
-    )
-    target: str = Field(
-        ...,
-        description="Label of the UI element to act on (must exist in context).",
-    )
-    value: str | None = Field(
+    navi_id: int
+    tag: str
+    id: str = ""
+    text: str = ""
+    context: str = ""
+
+
+class PageContext(BaseModel):
+    """High-level metadata about the current page."""
+
+    title: str = ""
+    url: str = ""
+    path: str = ""
+    pageText: str = ""
+
+
+# ── /api/guide ───────────────────────────────────────────────────────
+
+class GuideRequest(BaseModel):
+    """Payload sent by the extension to get the next tutorial step."""
+
+    query: str = Field(..., min_length=1, description="What the user wants to accomplish.")
+    elements: list[NaviElement] = Field(..., description="Interactive elements from extractNaviElements().")
+    page_context: PageContext = Field(default_factory=PageContext)
+    steps_completed: list[str] = Field(default_factory=list)
+
+
+class ActionInstruction(BaseModel):
+    """The LLM's single-step instruction output."""
+
+    current_task: str
+    navi_id: int
+    voice_text: str
+    action: ACTION_TYPE
+    value: str
+    is_done: bool
+    lang: SUPPORTED_LANGS
+    transcription: str
+
+
+class GuideResponse(BaseModel):
+    """Combined instruction + audio returned to the extension."""
+
+    instruction: ActionInstruction
+    audio_base64: str | None = Field(
         default=None,
-        description="Value to type or select, if applicable.",
+        description="WAV audio of the transcription, base64-encoded. None if TTS is unavailable.",
     )
 
 
-class AnalyzeResponse(BaseModel):
-    """Structured step-by-step action plan returned to the extension."""
+# ── /api/audio (standalone TTS) ─────────────────────────────────────
 
-    steps: list[ActionStep]
+class AudioRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=2500)
+    lang: SUPPORTED_LANGS = "hi-IN"
+
+
+class AudioResponse(BaseModel):
+    audio_base64: str

@@ -1,57 +1,51 @@
+import logging
 import os
-import tempfile
 from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
-from starlette.background import BackgroundTask
 
-from backend.llm.audio_generator import generate_audio
+from backend.app.models.schemas import (
+    AudioRequest,
+    AudioResponse,
+    GuideRequest,
+    GuideResponse,
+    ActionInstruction,
+)
+from backend.llm.audio_generator import generate_audio_base64
 from backend.llm.instructions import get_next_action
-from backend.app.routes.analyze import router as analyze_router
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(_REPO_ROOT / ".env")
-load_dotenv(_REPO_ROOT / "backend" / ".env")
+load_dotenv(_REPO_ROOT / "backend" / "llm" / ".env")
 
-app = FastAPI(title="uncJustClick API", version="0.1.0")
-app.include_router(analyze_router)
+logger = logging.getLogger(__name__)
+
+app = FastAPI(
+    title="UncDoIt API",
+    version="0.2.0",
+    description="Backend for the UncDoIt browser-extension tutorial overlay.",
+)
 
 _cors_origins = [
     o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()
 ]
 if not _cors_origins:
     _cors_origins = ["*"]
-_cors_credentials = "*" not in _cors_origins
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_credentials=_cors_credentials,
+    allow_credentials="*" not in _cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-def _unlink_quiet(path: str) -> None:
-    try:
-        os.unlink(path)
-    except OSError:
-        pass
-
-
-class NextActionBody(BaseModel):
-    query: str = Field(..., min_length=1)
-    html: str = Field(..., min_length=1)
-    steps_completed: list[str] = Field(default_factory=list)
-
-
-class AudioBody(BaseModel):
-    transcript_text: str = Field(..., min_length=1, max_length=2500)
-    lang: str = "hi-IN"
+def _require_env(name: str) -> None:
+    if not os.getenv(name):
+        raise HTTPException(503, f"{name} is not configured.")
 
 
 @app.get("/health")
@@ -59,47 +53,56 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/api/next-action")
-def next_action(body: NextActionBody):
-    if not os.getenv("GOOGLE_API_KEY"):
-        raise HTTPException(
-            status_code=503,
-            detail="GOOGLE_API_KEY is not configured.",
-        )
+@app.post("/api/guide", response_model=GuideResponse)
+def guide(body: GuideRequest):
+    """Main endpoint: returns the next tutorial step instruction + audio (base64).
+
+    The frontend sends page context and interactive elements extracted by
+    extractNaviElements(). The backend calls the LLM to determine the next
+    action the user should take, generates voice audio for the instruction,
+    and returns both in a single response.
+    """
+    _require_env("GOOGLE_API_KEY")
+
     try:
-        return get_next_action(
+        result = get_next_action(
             query=body.query,
-            html=body.html,
+            elements=[el.model_dump() for el in body.elements],
             steps_completed=body.steps_completed,
+            page_context=body.page_context.model_dump(),
         )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e)) from e
+        logger.exception("LLM call failed")
+        raise HTTPException(502, f"LLM error: {e}") from e
 
+    instruction = ActionInstruction(**result)
 
-@app.post("/api/audio")
-def audio(body: AudioBody):
-    if not os.getenv("SARVAM_TOKEN"):
-        raise HTTPException(
-            status_code=503,
-            detail="SARVAM_TOKEN is not configured.",
-        )
-    tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-    tmp.close()
-    try:
-        generate_audio(
-            transcript_text=body.transcript_text,
-            lang=body.lang,
-            output_file=tmp.name,
-        )
-        return FileResponse(
-            tmp.name,
-            media_type="audio/wav",
-            filename="instruction.wav",
-            background=BackgroundTask(_unlink_quiet, tmp.name),
-        )
-    except Exception as e:
+    audio_b64 = None
+    transcription = result.get("transcription", "").strip()
+    if transcription and os.getenv("SARVAM_TOKEN"):
         try:
-            os.unlink(tmp.name)
-        except OSError:
-            pass
-        raise HTTPException(status_code=502, detail=str(e)) from e
+            audio_b64 = generate_audio_base64(
+                transcript_text=transcription[:2500],
+                lang=result.get("lang", "hi-IN"),
+            )
+        except Exception:
+            logger.exception("Audio generation failed; returning instruction without audio")
+
+    return GuideResponse(instruction=instruction, audio_base64=audio_b64)
+
+
+@app.post("/api/audio", response_model=AudioResponse)
+def audio(body: AudioRequest):
+    """Standalone TTS endpoint — returns base64-encoded WAV audio."""
+    _require_env("SARVAM_TOKEN")
+
+    try:
+        b64 = generate_audio_base64(
+            transcript_text=body.text,
+            lang=body.lang,
+        )
+    except Exception as e:
+        logger.exception("Audio generation failed")
+        raise HTTPException(502, f"Audio error: {e}") from e
+
+    return AudioResponse(audio_base64=b64)

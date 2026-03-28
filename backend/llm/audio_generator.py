@@ -1,34 +1,52 @@
 import os
-import sys
-from dotenv import load_dotenv
+import base64
+import tempfile
+
 from sarvamai import SarvamAI
 from sarvamai.play import save
 
-load_dotenv(".env")
+_client: SarvamAI | None = None
 
-# Initialize client using environment variable or fallback
-api_key = os.getenv("SARVAM_TOKEN")
-client = SarvamAI(api_subscription_key="sk_il8nd0wq_mL7zek1E5cRXwtDNgD3dbWU9")
 
-def generate_audio(transcript_text, lang = "hi-IN", output_file="output1.wav"):
-    """
-    Generates an instruction-like audio from the provided transcript.
-    Uses 'bulbul:v3' and a slightly reduced pace for clarity.
-    """
-    print(f"Generating audio to {output_file}...")
-    audio = client.text_to_speech.convert(
+def _get_client() -> SarvamAI:
+    global _client
+    if _client is None:
+        api_key = os.getenv("SARVAM_TOKEN")
+        if not api_key:
+            raise RuntimeError("SARVAM_TOKEN is not configured.")
+        _client = SarvamAI(api_subscription_key=api_key)
+    return _client
+
+
+def generate_audio(transcript_text: str, lang: str = "hi-IN", output_file: str = "output1.wav"):
+    """Generate audio and save to a file."""
+    audio = _get_client().text_to_speech.convert(
         target_language_code=lang,
         text=transcript_text,
         model="bulbul:v3",
-        speaker="shubh", 
-        pace=0.9
+        speaker="shubh",
+        pace=0.9,
     )
     save(audio, output_file)
-    print("Audio saved successfully!")
+
+
+def generate_audio_base64(transcript_text: str, lang: str = "hi-IN") -> str:
+    """Generate audio and return as a base64-encoded string."""
+    tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+    tmp.close()
+    try:
+        generate_audio(transcript_text, lang, tmp.name)
+        with open(tmp.name, "rb") as f:
+            return base64.b64encode(f.read()).decode("ascii")
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass
+
 
 if __name__ == "__main__":
-    
-
+    from dotenv import load_dotenv
+    load_dotenv()
     transcript = "अब नीचे दिए गए 'Proceed to Checkout' बटन को दबाएं।"
-
-    generate_audio(transcript[:2500]) # Ensuring we stay within the v3 limit of 2500 chars
+    generate_audio(transcript[:2500])

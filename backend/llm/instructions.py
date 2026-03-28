@@ -1,12 +1,8 @@
 import os
 import json
+
 from google import genai
 from google.genai import types
-
-from dotenv import load_dotenv
-from audio_generator import generate_audio
-
-load_dotenv()
 
 _client: genai.Client | None = None
 
@@ -89,6 +85,9 @@ Infer the task from the query, page context, and elements, then return the singl
 
 
 if __name__ == "__main__":
+    from dotenv import load_dotenv
+    load_dotenv()
+
     test_page_context = {
   "title": "PAN Card Services Online | Apply for PAN Card | Easy PAN Card Application",
   "url": "https://onlineservices.proteantech.in/paam/endUserRegisterContact.html",
