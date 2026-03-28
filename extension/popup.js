@@ -14,6 +14,9 @@ let mediaRecorder = null;
 let recordChunks = [];
 let recordTimer = null;
 let voiceStarting = false;
+/** @type {'idle' | 'page_recording' | 'page_transcribing'} */
+let voicePhase = "idle";
+let pageVoiceTimer = null;
 
 const VOICE_HINT_DEFAULT =
   "Tap the mic to dictate your goal (uses your UncDoIt server for speech-to-text).";
@@ -73,7 +76,120 @@ function blobToBase64(blob) {
   });
 }
 
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.type !== "UNCDOIT_VOICE_RESULT") {
+    return;
+  }
+  if (pageVoiceTimer) {
+    clearTimeout(pageVoiceTimer);
+    pageVoiceTimer = null;
+  }
+  voicePhase = "idle";
+  voiceBtn.classList.remove("recording");
+  voiceBtn.setAttribute("aria-pressed", "false");
+  voiceHint.textContent = VOICE_HINT_DEFAULT;
+  if (msg.ok) {
+    const text = (msg.text || "").trim();
+    if (!text) {
+      setStatus("No speech recognized. Try again or type your goal.", true);
+      return;
+    }
+    const cur = intentEl.value.trim();
+    intentEl.value = cur ? `${cur} ${text}` : text;
+    void chrome.storage.local.set({
+      apiBaseUrl: (apiBaseEl.value.trim() || DEFAULT_API).replace(/\/$/, ""),
+    });
+    setStatus("Goal updated from voice.");
+  } else {
+    setStatus(
+      msg.error ||
+        "Voice input failed. If this site blocks inline scripts, try another page or type your goal.",
+      true,
+    );
+  }
+});
+
+async function tryStartVoiceOnActiveTab() {
+  const tab = await getActiveTab();
+  if (!tab?.id) {
+    return { ok: false, reason: "no_tab" };
+  }
+  const url = tab.url || "";
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    return { ok: false, reason: "not_http" };
+  }
+  const apiBaseUrl = (apiBaseEl.value.trim() || DEFAULT_API).replace(/\/$/, "");
+  await chrome.storage.local.set({ apiBaseUrl });
+  const payload = {
+    type: "UNCDOIT_VOICE",
+    action: "start",
+    apiBaseUrl,
+  };
+  async function send() {
+    return chrome.tabs.sendMessage(tab.id, payload);
+  }
+  try {
+    let r = await send();
+    if (r?.ok) {
+      return { ok: true };
+    }
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["voice-bridge.js"],
+    });
+    r = await send();
+    if (r?.ok) {
+      return { ok: true };
+    }
+    return { ok: false, reason: "bridge", error: r?.error };
+  } catch (e) {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["voice-bridge.js"],
+      });
+      const r = await send();
+      if (r?.ok) {
+        return { ok: true };
+      }
+      return { ok: false, reason: "bridge", error: r?.error };
+    } catch (e2) {
+      return { ok: false, reason: "inject", error: String(e2?.message || e2) };
+    }
+  }
+}
+
+async function stopPageVoiceRecording() {
+  if (pageVoiceTimer) {
+    clearTimeout(pageVoiceTimer);
+    pageVoiceTimer = null;
+  }
+  const tab = await getActiveTab();
+  if (tab?.id) {
+    try {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: "UNCDOIT_VOICE",
+        action: "stop",
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+  voicePhase = "page_transcribing";
+  voiceBtn.classList.remove("recording");
+  voiceBtn.setAttribute("aria-pressed", "false");
+  voiceHint.textContent = "Transcribing…";
+  setStatus("Transcribing…");
+}
+
 async function startVoiceRecording() {
+  if (voicePhase === "page_transcribing") {
+    return;
+  }
+  if (voicePhase === "page_recording") {
+    await stopPageVoiceRecording();
+    return;
+  }
   if (voiceStarting || (mediaRecorder && mediaRecorder.state === "recording")) {
     return;
   }
@@ -81,31 +197,44 @@ async function startVoiceRecording() {
     setStatus("Recording is not supported in this browser.", true);
     return;
   }
-  voiceStarting = true;
+
   setStatus("");
-  try {
-    const hasAudio = await chrome.permissions.contains({
-      permissions: ["audioCapture"],
-    });
-    if (!hasAudio) {
-      const granted = await chrome.permissions.request({
-        permissions: ["audioCapture"],
-      });
-      if (!granted) {
-        setStatus(
-          "Voice input needs mic access. Click Allow in the prompt, or open chrome://settings/content/microphone and allow this extension.",
-          true,
-        );
-        voiceStarting = false;
-        return;
+  const onTab = await tryStartVoiceOnActiveTab();
+  if (onTab.ok) {
+    voicePhase = "page_recording";
+    voiceBtn.classList.add("recording");
+    voiceBtn.setAttribute("aria-pressed", "true");
+    voiceHint.textContent =
+      "Listening on this page — tap mic to stop. (Uses this website’s microphone permission.)";
+    pageVoiceTimer = window.setTimeout(() => {
+      if (voicePhase === "page_recording") {
+        void stopPageVoiceRecording();
       }
-    }
-  } catch {
-    setStatus("Could not request microphone permission from the browser.", true);
-    voiceStarting = false;
+    }, MAX_RECORD_MS);
     return;
   }
 
+  if (onTab.reason === "not_http") {
+    setStatus(
+      "Open a normal http(s) webpage and try the mic again (voice uses the page’s permission).",
+      true,
+    );
+    return;
+  }
+  if (onTab.reason === "no_tab") {
+    setStatus("No active tab.", true);
+    return;
+  }
+
+  await startVoiceRecordingInPopup();
+}
+
+/**
+ * Fallback: record inside the popup (extension mic). Often blocked by Chrome;
+ * prefer page recording via voice-bridge.js on the active tab.
+ */
+async function startVoiceRecordingInPopup() {
+  voiceStarting = true;
   if (!navigator.mediaDevices?.getUserMedia) {
     setStatus("Microphone API is not available in this context.", true);
     voiceStarting = false;
@@ -119,7 +248,7 @@ async function startVoiceRecording() {
     const name = err && err.name;
     if (name === "NotAllowedError" || name === "PermissionDeniedError") {
       setStatus(
-        "Mic was blocked. In Chrome: Settings → Privacy and security → Site settings → Microphone. Set “Sites can ask…” on, remove this extension from Blocked, or reset permissions.",
+        "Extension mic blocked. Stay on a webpage and tap the mic again — we use the page’s mic permission. Or allow the extension under chrome://settings/content/microphone.",
         true,
       );
     } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
@@ -302,11 +431,18 @@ stopBtn.addEventListener("click", () => {
 });
 
 voiceBtn.addEventListener("click", () => {
+  if (voicePhase === "page_recording") {
+    void stopPageVoiceRecording();
+    return;
+  }
+  if (voicePhase === "page_transcribing") {
+    return;
+  }
   if (mediaRecorder && mediaRecorder.state === "recording") {
     stopVoiceRecording();
-  } else {
-    void startVoiceRecording();
+    return;
   }
+  void startVoiceRecording();
 });
 
 loadStoredApiBase();
