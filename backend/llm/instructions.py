@@ -32,7 +32,7 @@ Rules:
     prompt = f"""User query: {query}
 Steps already completed: {json.dumps(steps_completed)}
 
-Current page HTML (every interactive element has a data-navi-id):
+Current page parsed HTML (every interactive element has a data-navi-id) details:
 {html}
 
 Infer the task from the query and page, then return the single next action the user should take."""
@@ -67,70 +67,76 @@ Infer the task from the query and page, then return the single next action the u
 
 if __name__ == "__main__":
     test_html = """
-    <html>
-    <body>
-        <nav>
-            <div class="logo">Swiggy</div>
-            <input data-navi-id="0" id="search-bar" class="search-input" type="text" placeholder="Search for restaurants and food"/>
-            <button data-navi-id="1" class="search-btn">Search</button>
-        </nav>
-
-        <div class="menu-section" id="menu">
-            <h2>Biryani Place — Menu</h2>
-            <div class="menu-item" id="item-1">
-                <span class="item-name">Chicken Biryani</span>
-                <span class="item-price">₹220</span>
-                <p class="item-desc">Aromatic basmati rice with tender chicken pieces</p>
-                <div class="item-counter">
-                    <button data-navi-id="2" class="decrease-btn" data-item="chicken-biryani">-</button>
-                    <span class="item-count">1</span>
-                    <button data-navi-id="3" class="increase-btn" data-item="chicken-biryani">+</button>
-                </div>
-            </div>
-            <div class="menu-item" id="item-2">
-                <span class="item-name">Mutton Biryani</span>
-                <span class="item-price">₹320</span>
-                <p class="item-desc">Slow cooked mutton with fragrant spices</p>
-                <button data-navi-id="4" class="add-to-cart-btn" data-item="mutton-biryani">ADD</button>
-            </div>
-            <div class="menu-item" id="item-3">
-                <span class="item-name">Veg Biryani</span>
-                <span class="item-price">₹160</span>
-                <p class="item-desc">Fresh vegetables with saffron rice</p>
-                <button data-navi-id="5" class="add-to-cart-btn" data-item="veg-biryani">ADD</button>
-            </div>
-        </div>
-
-        <div class="cart-section" id="cart">
-            <h3>Your Cart</h3>
-            <div class="cart-items" id="cart-items">
-                <div class="cart-item">
-                    <span class="cart-item-name">Chicken Biryani</span>
-                    <span class="cart-item-qty">x1</span>
-                    <span class="cart-item-price">₹220</span>
-                </div>
-            </div>
-            <div class="cart-total" id="cart-total">Total: ₹220</div>
-            <button data-navi-id="6" class="proceed-btn" id="proceed-to-checkout">Proceed to Checkout</button>
-        </div>
-    </body>
-    </html>
+    [
+    {
+        "tag": "A",
+        "id": "",
+        "text": "Check Online Services"
+    },
+    {
+        "tag": "A",
+        "id": "",
+        "text": "Report / Dashboard"
+    },
+    {
+        "tag": "A",
+        "id": "",
+        "text": "Grievance"
+    },
+    {
+        "tag": "A",
+        "id": "",
+        "text": "Pay Online"
+    },
+    {
+        "tag": "A",
+        "id": "",
+        "text": "GET DETAIL"
+    },
+    {
+        "tag": "BUTTON",
+        "id": "btnSearch",
+        "text": "GET DETAIL"
+    },
+    {
+        "tag": "A",
+        "id": "",
+        "text": "Terms of Use |"
+    },
+    {
+        "tag": "A",
+        "id": "",
+        "text": "Privacy Policy |"
+    },
+    {
+        "tag": "A",
+        "id": "",
+        "text": "Copyright Policy |"
+    },
+    {
+        "tag": "A",
+        "id": "",
+        "text": "Hyperlink Policy |"
+    },
+    {
+        "tag": "A",
+        "id": "",
+        "text": "Contact Us"
+    }
+]
     """
 
     action = get_next_action(
-        query="मुझे चिकन बिरयानी ऑर्डर करनी है",
+        query="I need help with paying my car's challan",
         html=test_html,
         steps_completed=[
-            "opened swiggy homepage",
-            "clicked on Biryani Place restaurant",
-            "saw the menu with biryani options",
-            "clicked ADD on Chicken Biryani"
+            "Tap on the button that says Pay Online."
         ]
     )
 
     print(json.dumps(action, ensure_ascii=False, indent=2))
-    generate_audio(
-    transcript_text=action['transcription'],
-    lang=action['lang']
-    )
+    # generate_audio(
+    # transcript_text=action['transcription'],
+    # lang=action['lang']
+    # )
     
