@@ -28,6 +28,17 @@
   let guideAudioObjectUrl = null;
   let audioSyncGen = 0;
 
+  function pushCompleted(line) {
+    if (!line) return;
+    if (stepsCompleted.length === 0 || stepsCompleted[stepsCompleted.length - 1] !== line) {
+      stepsCompleted.push(line);
+    }
+  }
+
+  window.addEventListener("pagehide", () => {
+    if (query && apiBaseUrl) writeCheckpoint();
+  });
+
   function writeCheckpoint() {
     try {
       sessionStorage.setItem(
@@ -310,6 +321,7 @@
         if (!(t instanceof Node) || !el.contains(t)) return;
         finish();
       }, { capture: true, signal: sig });
+      el.addEventListener("change", () => finish(), { signal: sig });
       return;
     }
 
@@ -348,9 +360,8 @@
       index = history.length - 1;
       ensureRoot();
       layoutStep();
-      clearCheckpoint();
+      writeCheckpoint();
     } catch (e) {
-      clearCheckpoint();
       showError(String(e?.message || e));
     }
   }
@@ -358,9 +369,31 @@
   async function advanceGuideCore() {
     const cur = history[index];
     if (cur.isDone) { teardown(); return; }
-    if (cur.completedLine) stepsCompleted.push(cur.completedLine);
+    if (cur.completedLine) pushCompleted(cur.completedLine);
     writeCheckpoint();
+    showLoadingState();
     await fetchAndShowNextStep();
+  }
+
+  function showLoadingState() {
+    ensureRoot();
+    const titleNode = shadow.getElementById("site-guide-title");
+    const bodyNode = shadow.getElementById("site-guide-body");
+    const progressNode = shadow.getElementById("site-guide-progress");
+    const nextBtn = shadow.getElementById("site-guide-next");
+    const backBtn = shadow.getElementById("site-guide-back");
+    const stepNum = history.length > 0 ? index + 2 : 1;
+    if (titleNode) titleNode.textContent = "Loading\u2026";
+    if (bodyNode) bodyNode.textContent = "Getting the next step for you\u2026";
+    if (progressNode) progressNode.textContent = `Step ${stepNum}`;
+    if (nextBtn) nextBtn.style.display = "none";
+    if (backBtn) backBtn.style.visibility = "hidden";
+    backdropEl.style.pointerEvents = "";
+    cardEl.classList.add("is-loading");
+    spotlightEl.style.opacity = "0";
+    centerCard();
+    stopAudioPlayback();
+    hideAudioRow();
   }
 
   async function advanceAfterUserFollows() {
@@ -369,9 +402,11 @@
     const cur = history[index];
     if (cur.isDone) return;
     if (guideAdvancing) return;
-    if (cur.completedLine) stepsCompleted.push(cur.completedLine);
+    if (cur.completedLine) pushCompleted(cur.completedLine);
     writeCheckpoint();
     guideAdvancing = true;
+    showLoadingState();
+    await new Promise(r => setTimeout(r, 600));
     try { await fetchAndShowNextStep(); }
     finally { guideAdvancing = false; }
   }
@@ -384,7 +419,11 @@
     history = [];
     index = 0;
     guideAdvancing = true;
-    try { await fetchAndShowNextStep(); wireKeyboardResize(); }
+    try {
+      showLoadingState();
+      wireKeyboardResize();
+      await fetchAndShowNextStep();
+    }
     finally { guideAdvancing = false; }
   }
 
@@ -447,12 +486,16 @@
       nextBtn.type = "button";
       nextBtn.textContent = "Next";
 
+      const spinnerEl = document.createElement("div");
+      spinnerEl.id = "site-guide-spinner";
+
       actions.appendChild(backBtn);
       actions.appendChild(nextBtn);
       cardEl.appendChild(closeBtn);
       cardEl.appendChild(progressEl);
       cardEl.appendChild(titleEl);
       cardEl.appendChild(bodyEl);
+      cardEl.appendChild(spinnerEl);
       cardEl.appendChild(actions);
       cardEl.classList.add("has-close");
 
@@ -496,6 +539,7 @@
   function layoutStep() {
     if (!history.length) return;
     clearStepWatchers();
+    cardEl.classList.remove("is-loading");
 
     const step = history[index];
     const titleNode = shadow.getElementById("site-guide-title");
@@ -517,6 +561,8 @@
       ? `Step ${index + 1} — follow the highlight on the page`
       : `Step ${index + 1}`;
 
+    backdropEl.style.pointerEvents = canListen ? "none" : "";
+
     backBtn.style.visibility = overlayMode === "error" || index === 0 ? "hidden" : "visible";
     nextBtn.style.display = "";
 
@@ -525,7 +571,7 @@
     } else if (atLatest && step.isDone) {
       nextBtn.textContent = "Done";
     } else if (canListen) {
-      nextBtn.style.display = "none";
+      nextBtn.textContent = "Next";
     } else if (index < history.length - 1) {
       nextBtn.textContent = "Next";
     } else {
@@ -653,8 +699,9 @@
     overlayMode = "tour";
 
     try {
-      await fetchAndShowNextStep();
+      showLoadingState();
       wireKeyboardResize();
+      await fetchAndShowNextStep();
     } catch (e) {
       ensureRoot();
       overlayMode = "error";
