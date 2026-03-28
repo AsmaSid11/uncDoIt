@@ -39,6 +39,9 @@ function extractNaviElements() {
   }
   
   // --- test ---
+
+
+  
   const result = extractNaviElements()
   console.log("PAGE CONTEXT:", JSON.stringify(result.pageContext, null, 2))
   console.log("ELEMENTS:", JSON.stringify(result.elements, null, 2))
