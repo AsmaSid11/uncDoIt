@@ -167,3 +167,13 @@ See [`backend/API.md`](backend/API.md) for full request/response documentation w
 ## Team
 
 Built with care for the next billion users.
+
+---
+
+## License
+
+This project is licensed under the GNU General Public License v3.0. If you clone,
+reuse, or redistribute it, please keep the license notice intact and credit the
+UncDoIt project and its original authors in your own README or project notes.
+
+See [LICENSE](LICENSE) for the full text.
