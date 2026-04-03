@@ -1,8 +1,8 @@
 # UncDoIt
 
-**A GPS for the web** — a browser extension that guides first-time internet users through any website, one step at a time, with voice instructions in 11 Indian languages.
+> **🏆 First Prize — "Build for the Next 1 Billion Users" Cursor Hackathon**
 
-Built for the **"Build for the Next 1 Billion Users"** hackathon.
+**A GPS for the web** — a browser extension that turns any complex, hard-to-navigate website into a guided, voice-assisted walkthrough, one step at a time, in 11 Indian languages.
 
 ---
 
@@ -73,12 +73,10 @@ uncDoIt/
 │   │   └── models/
 │   │       └── schemas.py  # Pydantic models (request/response shapes)
 │   ├── llm/
-│   │   ├── instructions.py # Gemini LLM — determines next action
-│   │   ├── audio_generator.py  # Sarvam TTS — text to speech
-│   │   └── doc.md          # Language codes & limits reference
+│   │   ├── instructions.py     # Gemini LLM — determines next action
+│   │   └── audio_generator.py  # Sarvam TTS — text to speech
 │   └── API.md              # Full API documentation
 │
-├── frontend/               # Reference scripts (context extraction prototypes)
 ├── requirements.txt
 └── .env                    # API keys (not committed)
 ```
@@ -142,11 +140,11 @@ The API is live at `http://127.0.0.1:8000`. Interactive docs at `/docs`.
 
 ## API Endpoints
 
-| Method | Path          | Description                                    |
-|--------|---------------|------------------------------------------------|
-| GET    | `/health`     | Health check                                   |
+| Method | Path          | Description                                      |
+|--------|---------------|--------------------------------------------------|
+| GET    | `/health`     | Health check                                     |
 | POST   | `/api/guide`  | Get next step instruction + voice audio (base64) |
-| POST   | `/api/audio`  | Standalone text-to-speech                      |
+| POST   | `/api/audio`  | Standalone text-to-speech                        |
 
 See [`backend/API.md`](backend/API.md) for full request/response documentation with examples.
 
@@ -154,19 +152,21 @@ See [`backend/API.md`](backend/API.md) for full request/response documentation w
 
 ## Tech Stack
 
-| Component      | Technology                          |
-|----------------|-------------------------------------|
-| Extension      | Chrome Manifest V3, Shadow DOM      |
-| Backend        | Python, FastAPI, Uvicorn            |
+| Component      | Technology                                    |
+|----------------|-----------------------------------------------|
+| Extension      | Chrome Manifest V3, Shadow DOM                |
+| Backend        | Python, FastAPI, Uvicorn                      |
 | LLM            | Google Gemini (gemini-3.1-flash-lite-preview) |
-| Text-to-Speech | Sarvam AI (bulbul:v3)               |
-| Data Models    | Pydantic v2                         |
+| Text-to-Speech | Sarvam AI (bulbul:v3)                         |
+| Data Models    | Pydantic v2                                   |
 
 ---
 
 ## Team
 
-Built with care for the next billion users.
+Built with care for the next billion users by:
+
+[Asma](https://github.com/AsmaSid11) · [Harshita](https://github.com/Hash-D25) · [Ankrit](https://github.com/Ankritjarngal) · [Muizz](https://github.com/abdulmuizz0903)
 
 ---
 
