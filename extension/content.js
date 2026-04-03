@@ -12,6 +12,8 @@
   let cardEl;
   let onKey;
   let onResize;
+  let onScroll;
+  let scrollRaf = null;
 
   let history = [];
   let index = 0;
@@ -79,8 +81,16 @@
       else if (e.key === "ArrowLeft") go(-1);
     };
     onResize = () => { if (history.length && shadow) layoutStep(); };
+    onScroll = () => {
+      if (scrollRaf) return;
+      scrollRaf = requestAnimationFrame(() => {
+        scrollRaf = null;
+        repositionHighlight();
+      });
+    };
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onScroll, true);
   }
 
   function getNearestContext(element) {
@@ -536,6 +546,29 @@
     cardEl.style.transform = "translate(-50%, -50%)";
   }
 
+  function repositionHighlight() {
+    if (!history.length || !shadow || !cardEl || !spotlightEl) return;
+    const step = history[index];
+    const el = resolveTarget(step.selector);
+    if (!el) return;
+    const { top, left, width, height } = rectWithPadding(el);
+    spotlightEl.style.opacity = width && height ? "1" : "0";
+    spotlightEl.style.top = `${top}px`;
+    spotlightEl.style.left = `${left}px`;
+    spotlightEl.style.width = `${width}px`;
+    spotlightEl.style.height = `${height}px`;
+
+    const gap = 14;
+    const cr = cardEl.getBoundingClientRect();
+    let t = top + height + gap;
+    let l = left;
+    if (t + cr.height > window.innerHeight - 16) t = Math.max(16, top - gap - cr.height);
+    if (l + cr.width > window.innerWidth - 16) l = Math.max(16, window.innerWidth - 16 - cr.width);
+    cardEl.style.top = `${t}px`;
+    cardEl.style.left = `${l}px`;
+    cardEl.style.transform = "none";
+  }
+
   function layoutStep() {
     if (!history.length) return;
     clearStepWatchers();
@@ -582,22 +615,7 @@
       el.scrollIntoView({ block: "center", behavior: "smooth" });
       centerCard();
       requestAnimationFrame(() => {
-        const { top, left, width, height } = rectWithPadding(el);
-        spotlightEl.style.opacity = width && height ? "1" : "0";
-        spotlightEl.style.top = `${top}px`;
-        spotlightEl.style.left = `${left}px`;
-        spotlightEl.style.width = `${width}px`;
-        spotlightEl.style.height = `${height}px`;
-
-        const gap = 14;
-        const cr = cardEl.getBoundingClientRect();
-        let t = top + height + gap;
-        let l = left;
-        if (t + cr.height > window.innerHeight - 16) t = Math.max(16, top - gap - cr.height);
-        if (l + cr.width > window.innerWidth - 16) l = Math.max(16, window.innerWidth - 16 - cr.width);
-        cardEl.style.top = `${t}px`;
-        cardEl.style.left = `${l}px`;
-        cardEl.style.transform = "none";
+        repositionHighlight();
         attachStepWatchers();
         void syncAudioForCurrentStep();
       });
@@ -650,6 +668,8 @@
     clearStepWatchers();
     if (onKey) { window.removeEventListener("keydown", onKey); onKey = null; }
     if (onResize) { window.removeEventListener("resize", onResize); onResize = null; }
+    if (onScroll) { window.removeEventListener("scroll", onScroll, true); onScroll = null; }
+    if (scrollRaf) { cancelAnimationFrame(scrollRaf); scrollRaf = null; }
     const host = document.getElementById("site-guide-root");
     if (host) host.remove();
     shadow = undefined;
